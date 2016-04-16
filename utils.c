@@ -1,5 +1,5 @@
 /* utils.c is part of tgc package. 
-   Copyright (C) 2014	Faraz.V (faraz@fzv.ca)
+   Copyright (C) 2016	Faraz.V (faraz@fzv.ca)
   
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -196,10 +196,12 @@ va_dcl
 ------------------------------------------------------------------------------*/
 RETSIGTYPE sig_cld()
 {
-       //signal(SIGCLD, sig_cld);
+       //signal(SIGCHLD, sig_cld);
        //while (waitpid((pid_t)-1, (int *) NULL, WNOHANG) > 0);
 
-	while (wait3((int *)NULL, WNOHANG, (struct rusage *)NULL) > 0);
+	while (wait3((int *)NULL, WNOHANG, (struct rusage *)NULL) > 0)
+		;
+	signal(SIGCHLD, sig_cld);
 }
 
 /*---------------------------------------------------------------------------
@@ -284,7 +286,7 @@ void become_daemon(void)
 	// we are the child now!
 
         /* Stop zombies */
-        signal(SIGCLD, sig_cld);
+        signal(SIGCHLD, sig_cld);
 	
 #ifdef SETPGRP_VOID
 	setpgrp();
@@ -361,7 +363,7 @@ int read_data(int fd, unsigned char *buf, int len)
         int  nread=0;
         int  total_read = 0;
 
-	if (fd<0) return -1;
+	if (fd<0 || !buf) return -1;
 
         while (total_read < len) {
                 nread = read(fd, buf+total_read, len-total_read);
@@ -375,6 +377,29 @@ int read_data(int fd, unsigned char *buf, int len)
                 total_read += nread;
         }
         return total_read;
+}
+
+/*-----------------------------------------------------------------
+  read data from peer
+-----------------------------------------------------------------*/
+int read_data_with_timeout(int fd, char *buf, int len, unsigned int seconds)
+{
+        int  	rv = 0;
+	fd_set 	rdset;
+	struct timeval timeout;
+	
+	if (fd<0 || !buf) return -1;
+
+	FD_ZERO(&rdset);
+	FD_SET(fd, &rdset);
+	timeout.tv_sec = seconds;
+	timeout.tv_usec = 0;
+
+	rv = select(FD_SETSIZE, &rdset, NULL, NULL, &timeout);
+	if (rv <= 0)  // timeout or error
+		return -1;
+	
+	return read(fd, buf, len);
 }
 
 /*-----------------------------------------------------------------------------
@@ -443,7 +468,7 @@ int connect_server(char *host, int port)
 /*-----------------------------------------------------------------------------
  * open server socket!
 ------------------------------------------------------------------------------*/
-int open_server_socket(int port)
+int open_server_socket(char* host, int port)
 {
         struct sockaddr_in addr;
         int    sd=0, one=1;
@@ -452,9 +477,18 @@ int open_server_socket(int port)
         memset(&addr, 0, sizeof(addr));
         addr.sin_port = htons( port );
         addr.sin_family = AF_INET;
-        addr.sin_addr.s_addr = INADDR_ANY;
+
+	if (host && host[0]) {
+		if (inet_aton(host, (struct in_addr *) &addr.sin_addr.s_addr) == 0) {
+			PRINT_LOG(1,"Failed listening on %s interface", host);
+			return -1;
+		}
+	} else {
+        	addr.sin_addr.s_addr = INADDR_ANY;
+	}
+
         sd = socket(PF_INET, SOCK_STREAM, 0);
-        if (sd == -1)  {
+        if (sd == -1) {
                 PRINT_LOG(1,"socket failed");
                 return -1;
         }

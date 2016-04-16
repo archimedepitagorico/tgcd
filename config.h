@@ -1,5 +1,5 @@
 /* config.h.  Generated from config.h.in by configure.  */
-/* config.h.in.  Generated from configure.in by autoheader.  */
+/* config.h.in.  Generated from configure.ac by autoheader.  */
 
 /* Define to 1 if you have the <arpa/inet.h> header file. */
 #define HAVE_ARPA_INET_H 1
@@ -28,6 +28,9 @@
 /* Define to 1 if you have the <inttypes.h> header file. */
 #define HAVE_INTTYPES_H 1
 
+/* Define to 1 if you have the `mhash' library (-lmhash). */
+#define HAVE_LIBMHASH 1
+
 /* Define to 1 if you have the `nsl' library (-lnsl). */
 #define HAVE_LIBNSL 1
 
@@ -43,6 +46,9 @@
 
 /* Define to 1 if you have the `memset' function. */
 #define HAVE_MEMSET 1
+
+/* Define to 1 if you have the <mhash.h> header file. */
+#define HAVE_MHASH_H 1
 
 /* Define to 1 if you have the <netdb.h> header file. */
 #define HAVE_NETDB_H 1
@@ -139,13 +145,13 @@
 #define PACKAGE_NAME "tgcd"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "tgcd 1.0.2"
+#define PACKAGE_STRING "tgcd 1.1.1"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "tgcd"
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "1.0.2"
+#define PACKAGE_VERSION "1.1.1"
 
 /* Define as the return type of signal handlers (`int' or `void'). */
 #define RETSIGTYPE void
@@ -169,7 +175,7 @@
 #define TIME_WITH_SYS_TIME 1
 
 /* Version number of package */
-#define VERSION "1.0.2"
+#define VERSION "1.1.1"
 
 /* Define to empty if `const' does not conform to ANSI C. */
 /* #undef const */

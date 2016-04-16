@@ -1,5 +1,5 @@
 /*  
-   Copyright (C) 2014	Faraz.V (faraz@fzv.ca)
+   Copyright (C) 2016	Faraz.V (faraz@fzv.ca)
   
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -80,6 +80,10 @@ Disclaimer:
 #ifdef HAVE_LIBWRAP
 #include <tcpd.h>
 #include <syslog.h>
+#endif
+
+#ifdef HAVE_MHASH_H
+#include <mhash.h>
 #endif
 
 #ifdef HAVE_ANSIDECL_H

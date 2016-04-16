@@ -1,5 +1,5 @@
 /* tgcd.c is part of tgc package.
-   Copyright (C) 2014	Faraz.V (faraz@fzv.ca)
+   Copyright (C) 2016	Faraz.V (faraz@fzv.ca)
   
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -61,7 +61,7 @@ TGC	tgc;
 --------------------------------------------------------------------------------*/
 void print_version(void)
 {
-	printf("TCP Gender Changer, V%s Copyright (C) 2014 Faraz.V (faraz@fzv.ca)\n", VERSION);
+	printf("TCP Gender Changer, V%s Copyright (C) 2016 Faraz.V (faraz@fzv.ca)\n", VERSION);
 }
 
 /*------------------------------------------------------------------------------
@@ -81,16 +81,19 @@ void print_usage(int exit_code)
 	printf(" -c, --llhost host:port     The host and port of the ListenListen node.\n");
 	printf(" -i, --interval seconds     Time interval to periodically report to LL (default: %ds).\n", TGC_TIMEOUT);
 	printf(" -k, --key number	    Poorman's encryption (0-255, default: 0, means no encryption)\n");
-	
+#ifdef HAVE_MHASH_H
+	printf(" -a, --auth string          HMAC password to authenticate a control connection with LL\n");
+#endif
 	printf("\n");
-	printf(" ListenListen mode: %s -L -p port  -q port [-t n] [-k n ] [ common options ...]\n", PACKAGE);
+	printf(" ListenListen mode: %s -L -p port  -q port  [-k n ] [ common options ...]\n", PACKAGE);
 	printf(" -L, --llnode		    Become a LL (ListenListen) node.\n");
 	printf(" -q, --llport number 	    The port to listen on for incomming connection from a CC node\n");
 	printf(" -p, --port number 	    The port to listen on for incomming actual client connection\n");
-	printf(" -t, --timeout seconds      Inactivity timeout during connection with CC node (default: %ds).\n",
-	       (int)(TGC_TIMEOUT * 1.5));
+	printf(" -e, --interface 	    The interface for incomming actual client connection (default: all interfaces)\n");
 	printf(" -k, --key number 	    Poorman's encryption (0-255, default: 0, means no encryption)\n");
-	
+#ifdef HAVE_MHASH_H
+	printf(" -a, --auth string          HMAC password to authenticate an incoming CC control connection\n");
+#endif
 	printf("\n");
 	printf(" PortForwarder mode: %s -F -p port -s host:port [ common options ... ]\n", PACKAGE);
 	printf(" -F, --lcnode		    Become a ListenConnect node, i.e. just a simple port forwarder\n");
@@ -100,7 +103,7 @@ void print_usage(int exit_code)
 	printf("\n");
 	printf("Common options:\n");
         printf(" -m, --method { f | s }	    f: Fork  s: Select (default: s)\n");
-        printf(" -f, --filter filter	    Optional argument to run filter on new connections, IP passed as argument\n");
+        printf(" -f, --filter filter	    Optional argument to run a filter on new connections, IP passed as argument\n");
         printf(" -l, --log file 	    Write logs to file. (default:'%s')\n", TGC_DEFAULT_LOGFILE);
 	printf(" -g, --level number 	    Log level detail (default:%d).\n", TGC_DEFAULT_LOGLEVEL);
 	printf(" -n, --nodaemon             Do not become daemon\n");
@@ -143,7 +146,7 @@ void init_server(void)
 	signal(SIGHUP, shutdown_server);
 
 	if (tgc.method==TGC_METHOD_FORK) 
-		signal(SIGCLD, sig_cld);
+		signal(SIGCHLD, sig_cld);
 }
 
 /*-----------------------------------------------------------------------------
@@ -161,7 +164,7 @@ int main(int argc,char *argv[])
 	struct stat filter_stat;
 	
 	/* short options */
-	const char *short_options = "Cs:c:i:Lq:p:t:Fk:m:f:l:g:nhv";
+	const char *short_options = "Cs:c:i:Lq:p:e:Fk:a:m:f:l:g:nhv";
 	
 	/* long options */
 	const struct option long_options[] = {
@@ -173,7 +176,8 @@ int main(int argc,char *argv[])
 		{"llnode",	0, NULL, 'L'},
 		{"llport",	1, NULL, 'q'},
 		{"port",	1, NULL, 'p'},
-		{"timeout",	1, NULL, 't'},
+		{"interface",	1, NULL, 'e'},
+		{"auth",	1, NULL, 'a'},
 
 		{"lcnode",	0, NULL, 'F'},
 
@@ -238,13 +242,16 @@ int main(int argc,char *argv[])
 				else
 					tgc.node.ll.port = ntemp;
 				break;
+			case 'e':
+				strncpy(tgc.node.ll.interface, optarg, MAX_PATH);
+				break;
 			case 'l':
 				strncpy(logfilename, optarg, MAX_PATH);		
 				break;
 			case 'f':
-				strncpy( tgc.filter, optarg, MAX_PATH);
+				strncpy(tgc.filter, optarg, MAX_PATH);
 				rc = stat(tgc.filter, &filter_stat);
-				if (rc || !S_ISREG(filter_stat.st_mode)) {
+				if (rc || !S_ISREG(filter_stat.st_mode) || access(tgc.filter, X_OK)) {
 					fprintf(stderr, "Invalid filter '%s'\n", optarg);
 					exit(3);
 				}
@@ -268,14 +275,6 @@ int main(int argc,char *argv[])
 				}
 				tgc.node.cc.interval = ntemp;
 				break;
-			case 't':
-				ntemp = atoi(optarg);
-				if (!strnum(optarg) || ntemp<=0 || ntemp>65535) {
-					fprintf(stderr, "Invalid interval number '%s'\n", optarg);
-					exit(2);
-				}
-				tgc.node.ll.timeout = ntemp;
-				break;
 			case 'k':
 				ntemp = atoi(optarg);
 				if (!strnum(optarg) || ntemp<0 || ntemp>255) {
@@ -283,6 +282,18 @@ int main(int argc,char *argv[])
 					exit(2);
 				}
 				tgc.key = ntemp;
+				break;
+			case 'a':
+#ifdef HAVE_MHASH_H
+				if (tgc_gen_hash(&tgc, optarg) != 0) {
+					fprintf(stderr, "Failed generating HMAC hash\n");
+					exit(2);
+				}
+#else
+				fprintf(stderr, "%s is not built with HMAC support\n",
+					program_name);
+				exit(2);
+#endif
 				break;
 			case 'n':
 				is_daemon = 0;
